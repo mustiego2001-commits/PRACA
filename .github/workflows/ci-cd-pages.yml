@@ -44,8 +44,7 @@ jobs:
       # curl fetches JSON from Open-Meteo; jq extracts each field.
       - name: Fetch data from Open-Meteo API
         run: |
-          DATA=$(curl -fsSL \
-            "https://api.open-meteo.com/v1/forecast\?latitude=52.52&longitude=13.41\&current=temperature_2m,wind_speed_10m,weather_code,relative_humidity_2m\&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code\&timezone=auto&forecast_days=7")
+          DATA=$(curl -fsSL "https://api.open-meteo.com/v1/forecast\?latitude=52.52&longitude=13.41\&current=temperature_2m,wind_speed_10m,weather_code,relative_humidity_2m\&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code\&timezone=auto&forecast_days=7")
  
           echo "$DATA" > /tmp/weather.json
           echo "API fetch complete."
