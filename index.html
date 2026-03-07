@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Junior DevOps Assessment Demo</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="container">
+    <header class="hero">
+      <p class="eyebrow">Junior DevOps Engineer</p>
+      <h1>Public API Dashboard</h1>
+      <p class="subtitle">
+        Prosty projekt pokazujacy CI/CD, deployment i obsluge bledow API.
+      </p>
+    </header>
+
+    <section class="panel controls">
+      <h2>Kontrola</h2>
+      <div class="row">
+        <label for="userSelect">Wybierz uzytkownika</label>
+        <select id="userSelect" aria-label="Wybierz uzytkownika"></select>
+      </div>
+      <div class="row">
+        <button id="refreshBtn" type="button">Odswiez dane</button>
+        <span id="status" class="status">Ladowanie...</span>
+      </div>
+      <p id="meta" class="meta"></p>
+    </section>
+
+    <section class="cards" aria-live="polite">
+      <article class="panel card">
+        <h3>Uzytkownik</h3>
+        <p id="userName">-</p>
+      </article>
+      <article class="panel card">
+        <h3>Liczba postow</h3>
+        <p id="postCount">-</p>
+      </article>
+      <article class="panel card">
+        <h3>Srednia dlugosc posta</h3>
+        <p id="avgLength">-</p>
+      </article>
+    </section>
+
+    <section class="panel explanation">
+      <h2>Co ten projekt pokazuje</h2>
+      <ul>
+        <li>Requesty do public API (JSONPlaceholder).</li>
+        <li>Timeout i retry dla requestow.</li>
+        <li>Cache w localStorage, zeby ograniczyc rate-limit i opoznienia.</li>
+        <li>Jasny status powodzenia/bledu dla uzytkownika.</li>
+      </ul>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
