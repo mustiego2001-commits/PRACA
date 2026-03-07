@@ -1,125 +1,131 @@
-# Hourly data fetch → HTML update → GitHub Pages deployment
-# ──────────────────────────────────────────────────────────
-# All logic lives inside this workflow file.
-# No external scripts are used.
-# Data source: Open-Meteo (https://open-meteo.com) — free, no API key required.
 name: Deploy static content to Pages
-
+ 
 on:
-  # Runs at the top of every hour
+  # Runs every minute (minimum interval GitHub supports).
+  # Note: GitHub may delay scheduled runs by several minutes under high load.
   schedule:
     - cron: "* * * * *"
-
+ 
+  # Runs on every push to the default branch so you can verify the result immediately.
+  push:
+    branches:
+      - main   # change to master or your default branch name if different
+ 
   # Allows manual triggering from the Actions tab
   workflow_dispatch:
-
+ 
 # contents: write  — needed to commit updated HTML back to the repo
 # pages / id-token — needed to deploy to GitHub Pages
 permissions:
   contents: write
   pages: write
   id-token: write
-
+ 
 # Allow only one concurrent deployment; never cancel in-progress runs
 concurrency:
   group: "pages"
   cancel-in-progress: false
-
+ 
 jobs:
   fetch-update-deploy:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-
+ 
     steps:
       # ── 1. Checkout ──────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      # ── 2. Fetch live data + rewrite public/index.html ───────────────────
-      # An inline Python script (no external file) reads the placeholder HTML
-      # already present in the repo, replaces every _TOKEN_ with real API
-      # data, and overwrites the file.  Python 3 ships on ubuntu-latest with
-      # no extra install step needed.
-      - name: Fetch data from Open-Meteo API and update HTML
+ 
+      # ── 2. Fetch live weather data ────────────────────────────────────────
+      # curl fetches JSON from Open-Meteo; jq extracts each field.
+      - name: Fetch data from Open-Meteo API
         run: |
-          python3 - << 'PYEOF'
-          import urllib.request, json, datetime, os
-
-          API_URL = (
-              "https://api.open-meteo.com/v1/forecast"
-              "?latitude=52.52&longitude=13.41"
-              "&current=temperature_2m,wind_speed_10m,weather_code,relative_humidity_2m"
-              "&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code"
-              "&timezone=auto&forecast_days=7"
-          )
-
-          # WMO weather-code → human label (subset covering common codes)
-          WMO = {
-              0:"Clear sky", 1:"Mainly clear", 2:"Partly cloudy", 3:"Overcast",
-              45:"Fog", 48:"Rime fog",
-              51:"Light drizzle", 53:"Moderate drizzle", 55:"Dense drizzle",
-              61:"Slight rain", 63:"Moderate rain", 65:"Heavy rain",
-              71:"Slight snow", 73:"Moderate snow", 75:"Heavy snow",
-              80:"Slight showers", 81:"Moderate showers", 82:"Violent showers",
-              95:"Thunderstorm", 99:"Thunderstorm + heavy hail",
-          }
-
-          print("Fetching data from Open-Meteo API...")
-          with urllib.request.urlopen(API_URL) as resp:
-              data = json.loads(resp.read())
-
-          cur   = data["current"]
-          units = data["current_units"]
-          daily = data["daily"]
-          cond  = WMO.get(cur["weather_code"], "Code " + str(cur["weather_code"]))
-          now   = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
-
-          # Build the 7-day forecast table rows
-          rows = ""
-          for i, date in enumerate(daily["time"]):
-              dc = WMO.get(daily["weather_code"][i], str(daily["weather_code"][i]))
-              rows += (
-                  "<tr>"
-                  "<td>" + date + "</td>"
-                  "<td>" + dc + "</td>"
-                  "<td>"
-                      + str(daily["temperature_2m_max"][i]) + "&deg;C / "
-                      + str(daily["temperature_2m_min"][i]) + "&deg;C"
-                  + "</td>"
-                  "<td>" + str(daily["precipitation_sum"][i]) + " mm</td>"
-                  "</tr>\n          "
-              )
-
-          # Read placeholder HTML, fill every _TOKEN_, write back.
-          # Using plain .replace() means no f-string / CSS-brace escaping needed.
-          html_path = os.path.join("index.html")
-          with open(html_path, encoding="utf-8") as fh:
-              page = fh.read()
-
-          page = (
-              page
-              .replace("_TEMPERATURE_", str(cur["temperature_2m"]) + " " + units["temperature_2m"])
-              .replace("_HUMIDITY_",    str(cur["relative_humidity_2m"]) + units["relative_humidity_2m"])
-              .replace("_WIND_",        str(cur["wind_speed_10m"]) + " " + units["wind_speed_10m"])
-              .replace("_CONDITION_",   cond)
-              .replace("_ROWS_",        rows)
-              .replace("_FETCHED_AT_",  now)
-              # Strip the "placeholder" notice banner on first real update
-              .replace(' class="value pending"', ' class="value"')
-              .replace(' class="pending"', "")
-          )
-
-          with open(html_path, "w", encoding="utf-8") as fh:
-              fh.write(page)
-
-          print("index.html updated successfully.")
-          PYEOF
-
-      # ── 3. Commit & push the updated HTML back to the repo ───────────────
+          DATA=$(curl -fsSL \
+            "https://api.open-meteo.com/v1/forecast\?latitude=52.52&longitude=13.41\&current=temperature_2m,wind_speed_10m,weather_code,relative_humidity_2m\&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code\&timezone=auto&forecast_days=7")
+ 
+          echo "$DATA" > /tmp/weather.json
+          echo "API fetch complete."
+ 
+      # ── 3. Inject data into index.html using element IDs ─────────────────
+      # IDs are always present in the committed HTML, so this works every run.
+      - name: Update HTML with live data
+        run: |
+          DATA=$(cat /tmp/weather.json)
+ 
+          TEMP=$(echo "$DATA"      | jq -r '.current.temperature_2m')
+          TEMP_UNIT=$(echo "$DATA" | jq -r '.current_units.temperature_2m')
+          HUMIDITY=$(echo "$DATA"  | jq -r '.current.relative_humidity_2m')
+          HUM_UNIT=$(echo "$DATA"  | jq -r '.current_units.relative_humidity_2m')
+          WIND=$(echo "$DATA"      | jq -r '.current.wind_speed_10m')
+          WIND_UNIT=$(echo "$DATA" | jq -r '.current_units.wind_speed_10m')
+          WCODE=$(echo "$DATA"     | jq -r '.current.weather_code')
+          FETCHED_AT=$(date -u '+%Y-%m-%d %H:%M UTC')
+ 
+          case "$WCODE" in
+            0)        COND="Clear sky" ;;
+            1)        COND="Mainly clear" ;;
+            2)        COND="Partly cloudy" ;;
+            3)        COND="Overcast" ;;
+            45|48)    COND="Fog" ;;
+            51|53|55) COND="Drizzle" ;;
+            61|63|65) COND="Rain" ;;
+            71|73|75) COND="Snow" ;;
+            80|81|82) COND="Showers" ;;
+            95)       COND="Thunderstorm" ;;
+            99)       COND="Thunderstorm + hail" ;;
+            *)        COND="Code $WCODE" ;;
+          esac
+ 
+          # ── Replace single-line values via ID ─────────────────────────────
+          sed -i "s|id=\"temp-value\" class=\"value\">[^<]*|id=\"temp-value\" class=\"value\">${TEMP} ${TEMP_UNIT}|g" index.html
+          sed -i "s|id=\"humidity-value\" class=\"value\">[^<]*|id=\"humidity-value\" class=\"value\">${HUMIDITY}${HUM_UNIT}|g" index.html
+          sed -i "s|id=\"wind-value\" class=\"value\">[^<]*|id=\"wind-value\" class=\"value\">${WIND} ${WIND_UNIT}|g" index.html
+          sed -i "s|id=\"condition-value\"[^>]*>[^<]*|id=\"condition-value\" class=\"value\" style=\"font-size:1rem\">${COND}|g" index.html
+          sed -i "s|id=\"last-updated\"[^>]*>[^<]*|id=\"last-updated\" class=\"footer\">Last updated: ${FETCHED_AT}|g" index.html
+ 
+          # ── Build 7-day forecast rows ─────────────────────────────────────
+          COUNT=$(echo "$DATA" | jq '.daily.time | length')
+          ROWS=""
+          for i in $(seq 0 $((COUNT - 1))); do
+            D=$(echo  "$DATA" | jq -r ".daily.time[$i]")
+            C=$(echo  "$DATA" | jq -r ".daily.weather_code[$i]")
+            HI=$(echo "$DATA" | jq -r ".daily.temperature_2m_max[$i]")
+            LO=$(echo "$DATA" | jq -r ".daily.temperature_2m_min[$i]")
+            PR=$(echo "$DATA" | jq -r ".daily.precipitation_sum[$i]")
+            case "$C" in
+              0)        DC="Clear sky" ;;
+              1)        DC="Mainly clear" ;;
+              2)        DC="Partly cloudy" ;;
+              3)        DC="Overcast" ;;
+              45|48)    DC="Fog" ;;
+              51|53|55) DC="Drizzle" ;;
+              61|63|65) DC="Rain" ;;
+              71|73|75) DC="Snow" ;;
+              80|81|82) DC="Showers" ;;
+              95)       DC="Thunderstorm" ;;
+              99)       DC="Thunderstorm + hail" ;;
+              *)        DC="Code $C" ;;
+            esac
+            ROWS="${ROWS}          <tr><td>${D}</td><td>${DC}</td><td>${HI}°C / ${LO}°C</td><td>${PR} mm</td></tr>\n"
+          done
+ 
+          # ── Replace tbody contents, keyed off id="forecast-body" ──────────
+          OPEN_LINE=$(grep -n 'id="forecast-body"' index.html | cut -d: -f1)
+          CLOSE_LINE=$(awk 'NR>'"$OPEN_LINE"' && /<\/tbody>/{print NR; exit}' index.html)
+          {
+            head -n $OPEN_LINE index.html
+            printf "%b" "$ROWS"
+            tail -n +$CLOSE_LINE index.html
+          } > /tmp/updated.html
+          mv /tmp/updated.html index.html
+ 
+          echo "index.html updated successfully."
+ 
+      # ── 4. Commit & push the updated HTML back to the repo ───────────────
       # [skip ci] prevents this push from re-triggering the workflow.
       - name: Commit and push updated HTML
         run: |
@@ -132,18 +138,18 @@ jobs:
             git commit -m "chore(data): refresh weather dashboard $(date -u +'%Y-%m-%dT%H:%M:%SZ') [skip ci]"
             git push
           fi
-
-      # ── 4. Configure GitHub Pages ────────────────────────────────────────
+ 
+      # ── 5. Configure GitHub Pages ────────────────────────────────────────
       - name: Setup Pages
         uses: actions/configure-pages@v5
-
-      # ── 5. Upload public/ as the Pages artifact ──────────────────────────
+ 
+      # ── 6. Upload public/ as the Pages artifact ──────────────────────────
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '/'
-
-      # ── 6. Deploy to GitHub Pages ────────────────────────────────────────
+          path: '.'
+ 
+      # ── 7. Deploy to GitHub Pages ────────────────────────────────────────
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
