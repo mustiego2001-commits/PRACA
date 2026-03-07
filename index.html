@@ -1,60 +1,119 @@
-<!doctype html>
-<html lang="pl">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Junior DevOps Assessment Demo</title>
-  <link rel="stylesheet" href="./styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weather Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f4f8;
+      color: #333;
+      margin: 0;
+      padding: 40px 20px;
+    }
+    .container { max-width: 860px; margin: auto; }
+    h1 { font-size: 1.8rem; margin-bottom: 4px; }
+    .subtitle { color: #666; margin-bottom: 24px; font-size: 0.95rem; }
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .card h2 {
+      margin-top: 0;
+      font-size: 1.1rem;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+    }
+    .stat { background: #f8fafc; border-radius: 8px; padding: 16px; text-align: center; }
+    .stat .value { font-size: 2rem; font-weight: 700; color: #1a6db5; }
+    .stat .label { font-size: 0.8rem; color: #888; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #1a6db5; color: #fff; padding: 10px 14px; text-align: left; font-weight: 600; }
+    td { padding: 10px 14px; border-bottom: 1px solid #eef; }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    .footer { color: #aaa; font-size: 0.82rem; text-align: center; margin-top: 8px; }
+    .pending {
+      opacity: .45;
+      font-style: italic;
+    }
+    .banner {
+      background: #fffbe6;
+      border: 1px solid #ffe58f;
+      border-radius: 8px;
+      padding: 12px 18px;
+      margin-bottom: 24px;
+      font-size: 0.9rem;
+      color: #7d5a00;
+    }
+  </style>
 </head>
 <body>
-  <main class="container">
-    <header class="hero">
-      <p class="eyebrow">Junior DevOps Engineer</p>
-      <h1>Public API Dashboard</h1>
-      <p class="subtitle">
-        Prosty projekt pokazujacy CI/CD, deployment i obsluge bledow API.
-      </p>
-    </header>
+  <div class="container">
+    <h1>&#127748; Weather Dashboard</h1>
+    <p class="subtitle">
+      Berlin, Germany &mdash; data via
+      <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>
+      (public API, no authentication required)
+    </p>
 
-    <section class="panel controls">
-      <h2>Kontrola</h2>
-      <div class="row">
-        <label for="userSelect">Wybierz uzytkownika</label>
-        <select id="userSelect" aria-label="Wybierz uzytkownika"></select>
+    <div class="banner">
+      &#9203; This is the <strong>placeholder page</strong>. Live data will be injected
+      automatically by the hourly GitHub Actions workflow and this page will be
+      redeployed to GitHub Pages.
+    </div>
+
+    <div class="card">
+      <h2>Current Conditions</h2>
+      <div class="stat-grid">
+        <div class="stat">
+          <div class="value pending">__TEMPERATURE__</div>
+          <div class="label">Temperature</div>
+        </div>
+        <div class="stat">
+          <div class="value pending">__HUMIDITY__</div>
+          <div class="label">Humidity</div>
+        </div>
+        <div class="stat">
+          <div class="value pending">__WIND__</div>
+          <div class="label">Wind Speed</div>
+        </div>
+        <div class="stat">
+          <div class="value pending" style="font-size:1rem">__CONDITION__</div>
+          <div class="label">Condition</div>
+        </div>
       </div>
-      <div class="row">
-        <button id="refreshBtn" type="button">Odswiez dane</button>
-        <span id="status" class="status">Ladowanie...</span>
-      </div>
-      <p id="meta" class="meta"></p>
-    </section>
+    </div>
 
-    <section class="cards" aria-live="polite">
-      <article class="panel card">
-        <h3>Uzytkownik</h3>
-        <p id="userName">-</p>
-      </article>
-      <article class="panel card">
-        <h3>Liczba postow</h3>
-        <p id="postCount">-</p>
-      </article>
-      <article class="panel card">
-        <h3>Srednia dlugosc posta</h3>
-        <p id="avgLength">-</p>
-      </article>
-    </section>
+    <div class="card">
+      <h2>7-Day Forecast</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Condition</th>
+            <th>High / Low</th>
+            <th>Precipitation</th>
+          </tr>
+        </thead>
+        <tbody>
+          _ROWS_
+        </tbody>
+      </table>
+    </div>
 
-    <section class="panel explanation">
-      <h2>Co ten projekt pokazuje</h2>
-      <ul>
-        <li>Requesty do public API (JSONPlaceholder).</li>
-        <li>Timeout i retry dla requestow.</li>
-        <li>Cache w localStorage, zeby ograniczyc rate-limit i opoznienia.</li>
-        <li>Jasny status powodzenia/bledu dla uzytkownika.</li>
-      </ul>
-    </section>
-  </main>
-
-  <script src="./app.js"></script>
+    <p class="footer">Last updated: __FETCHED_AT__</p>
+  </div>
 </body>
 </html>

@@ -1,63 +1,149 @@
-name: CI and Deploy to GitHub Pages
+# Hourly data fetch → HTML update → GitHub Pages deployment
+# ──────────────────────────────────────────────────────────
+# All logic lives inside this workflow file.
+# No external scripts are used.
+# Data source: Open-Meteo (https://open-meteo.com) — free, no API key required.
+name: Deploy static content to Pages
 
 on:
-  pull_request:
-    branches: ["main"]
-  push:
-    branches: ["main"]
+  # Runs at the top of every hour
+  schedule:
+    - cron: "0 * * * *"
+
+  # Allows manual triggering from the Actions tab
   workflow_dispatch:
 
+# contents: write  — needed to commit updated HTML back to the repo
+# pages / id-token — needed to deploy to GitHub Pages
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
+# Allow only one concurrent deployment; never cancel in-progress runs
 concurrency:
-  group: pages
+  group: "pages"
   cancel-in-progress: false
 
 jobs:
-  validate:
-    name: Validate JS and structure
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: JS syntax check
-        run: node --check app.js
-
-      - name: Verify required files
-        run: |
-          test -f index.html
-          test -f styles.css
-          test -f app.js
-
-  deploy:
-    name: Deploy to GitHub Pages
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: validate
-    runs-on: ubuntu-latest
+  fetch-update-deploy:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    runs-on: ubuntu-latest
 
-      - name: Configure Pages
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 2. Fetch live data + rewrite public/index.html ───────────────────
+      # An inline Python script (no external file) reads the placeholder HTML
+      # already present in the repo, replaces every _TOKEN_ with real API
+      # data, and overwrites the file.  Python 3 ships on ubuntu-latest with
+      # no extra install step needed.
+      - name: Fetch data from Open-Meteo API and update HTML
+        run: |
+          python3 - << 'PYEOF'
+          import urllib.request, json, datetime, os
+
+          API_URL = (
+              "https://api.open-meteo.com/v1/forecast"
+              "?latitude=52.52&longitude=13.41"
+              "&current=temperature_2m,wind_speed_10m,weather_code,relative_humidity_2m"
+              "&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code"
+              "&timezone=auto&forecast_days=7"
+          )
+
+          # WMO weather-code → human label (subset covering common codes)
+          WMO = {
+              0:"Clear sky", 1:"Mainly clear", 2:"Partly cloudy", 3:"Overcast",
+              45:"Fog", 48:"Rime fog",
+              51:"Light drizzle", 53:"Moderate drizzle", 55:"Dense drizzle",
+              61:"Slight rain", 63:"Moderate rain", 65:"Heavy rain",
+              71:"Slight snow", 73:"Moderate snow", 75:"Heavy snow",
+              80:"Slight showers", 81:"Moderate showers", 82:"Violent showers",
+              95:"Thunderstorm", 99:"Thunderstorm + heavy hail",
+          }
+
+          print("Fetching data from Open-Meteo API...")
+          with urllib.request.urlopen(API_URL) as resp:
+              data = json.loads(resp.read())
+
+          cur   = data["current"]
+          units = data["current_units"]
+          daily = data["daily"]
+          cond  = WMO.get(cur["weather_code"], "Code " + str(cur["weather_code"]))
+          now   = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+
+          # Build the 7-day forecast table rows
+          rows = ""
+          for i, date in enumerate(daily["time"]):
+              dc = WMO.get(daily["weather_code"][i], str(daily["weather_code"][i]))
+              rows += (
+                  "<tr>"
+                  "<td>" + date + "</td>"
+                  "<td>" + dc + "</td>"
+                  "<td>"
+                      + str(daily["temperature_2m_max"][i]) + "&deg;C / "
+                      + str(daily["temperature_2m_min"][i]) + "&deg;C"
+                  + "</td>"
+                  "<td>" + str(daily["precipitation_sum"][i]) + " mm</td>"
+                  "</tr>\n          "
+              )
+
+          # Read placeholder HTML, fill every _TOKEN_, write back.
+          # Using plain .replace() means no f-string / CSS-brace escaping needed.
+          html_path = os.path.join("public", "index.html")
+          with open(html_path, encoding="utf-8") as fh:
+              page = fh.read()
+
+          page = (
+              page
+              .replace("_TEMPERATURE_", str(cur["temperature_2m"]) + " " + units["temperature_2m"])
+              .replace("_HUMIDITY_",    str(cur["relative_humidity_2m"]) + units["relative_humidity_2m"])
+              .replace("_WIND_",        str(cur["wind_speed_10m"]) + " " + units["wind_speed_10m"])
+              .replace("_CONDITION_",   cond)
+              .replace("_ROWS_",        rows)
+              .replace("_FETCHED_AT_",  now)
+              # Strip the "placeholder" notice banner on first real update
+              .replace(' class="value pending"', ' class="value"')
+              .replace(' class="pending"', "")
+          )
+
+          with open(html_path, "w", encoding="utf-8") as fh:
+              fh.write(page)
+
+          print("public/index.html updated successfully.")
+          PYEOF
+
+      # ── 3. Commit & push the updated HTML back to the repo ───────────────
+      # [skip ci] prevents this push from re-triggering the workflow.
+      - name: Commit and push updated HTML
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name  "github-actions[bot]"
+          git add public/index.html
+          if git diff --staged --quiet; then
+            echo "No changes detected — nothing to commit."
+          else
+            git commit -m "chore(data): refresh weather dashboard $(date -u +'%Y-%m-%dT%H:%M:%SZ') [skip ci]"
+            git push
+          fi
+
+      # ── 4. Configure GitHub Pages ────────────────────────────────────────
+      - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      # ── 5. Upload public/ as the Pages artifact ──────────────────────────
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: "."
+          path: 'public/'
 
-      - name: Deploy
+      # ── 6. Deploy to GitHub Pages ────────────────────────────────────────
+      - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
