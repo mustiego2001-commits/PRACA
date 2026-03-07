@@ -116,7 +116,7 @@ jobs:
           with open(html_path, "w", encoding="utf-8") as fh:
               fh.write(page)
 
-          print("public/index.html updated successfully.")
+          print("index.html updated successfully.")
           PYEOF
 
       # ── 3. Commit & push the updated HTML back to the repo ───────────────
@@ -125,7 +125,7 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name  "github-actions[bot]"
-          git add public/index.html
+          git add index.html
           if git diff --staged --quiet; then
             echo "No changes detected — nothing to commit."
           else
@@ -141,7 +141,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'public/'
+          path: '/'
 
       # ── 6. Deploy to GitHub Pages ────────────────────────────────────────
       - name: Deploy to GitHub Pages
