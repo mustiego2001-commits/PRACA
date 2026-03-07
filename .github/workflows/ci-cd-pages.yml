@@ -96,7 +96,7 @@ jobs:
 
           # Read placeholder HTML, fill every _TOKEN_, write back.
           # Using plain .replace() means no f-string / CSS-brace escaping needed.
-          html_path = os.path.join("public", "index.html")
+          html_path = os.path.join("index.html")
           with open(html_path, encoding="utf-8") as fh:
               page = fh.read()
 
