@@ -1,126 +1,46 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Weather Dashboard</title>
   <style>
-    *, *::before, *::after { box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #f0f4f8;
-      color: #333;
-      margin: 0;
-      padding: 40px 20px;
-    }
-    .container { max-width: 860px; margin: auto; }
-    h1 { font-size: 1.8rem; margin-bottom: 4px; }
-    .subtitle { color: #666; margin-bottom: 24px; font-size: 0.95rem; }
-    .card {
-      background: #fff;
-      border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(0,0,0,.08);
-      padding: 24px;
-      margin-bottom: 24px;
-    }
-    .card h2 {
-      margin-top: 0;
-      font-size: 1.1rem;
-      color: #555;
-      text-transform: uppercase;
-      letter-spacing: .05em;
-    }
-    .stat-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 16px;
-    }
-    .stat { background: #f8fafc; border-radius: 8px; padding: 16px; text-align: center; }
-    .stat .value { font-size: 2rem; font-weight: 700; color: #1a6db5; }
-    .stat .label { font-size: 0.8rem; color: #888; margin-top: 4px; }
+    body { font-family: Arial, sans-serif; margin: 2rem auto; max-width: 900px; line-height: 1.5; color: #1f2937; padding: 0 1rem; }
+    h1, h2 { margin-bottom: .5rem; }
+    .meta { color: #4b5563; margin-bottom: 1rem; }
+    .cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: 1.5rem; }
+    .card { border: 1px solid #e5e7eb; border-radius: .5rem; padding: .75rem; background: #f9fafb; }
+    .label { font-size: .8rem; color: #6b7280; }
+    .value { font-size: 1.2rem; font-weight: 700; }
     table { width: 100%; border-collapse: collapse; }
-    th { background: #1a6db5; color: #fff; padding: 10px 14px; text-align: left; font-weight: 600; }
-    td { padding: 10px 14px; border-bottom: 1px solid #eef; }
-    tr:last-child td { border-bottom: none; }
-    tr:nth-child(even) td { background: #f8fafc; }
-    .footer { color: #aaa; font-size: 0.82rem; text-align: center; margin-top: 8px; }
-    .pending {
-      opacity: .45;
-      font-style: italic;
-    }
-    .banner {
-      background: #fffbe6;
-      border: 1px solid #ffe58f;
-      border-radius: 8px;
-      padding: 12px 18px;
-      margin-bottom: 24px;
-      font-size: 0.9rem;
-      color: #7d5a00;
-    }
+    th, td { border: 1px solid #e5e7eb; padding: .5rem; text-align: left; }
+    th { background: #f3f4f6; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>&#127748; Weather Dashboard</h1>
-    <p class="subtitle">
-      Berlin, Germany &mdash; data via
-      <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>
-      (public API, no authentication required)
-    </p>
+  <h1>Berlin Weather Dashboard</h1>
+  <p class="meta">Last update: 2026-03-08 00:06:38 UTC</p>
 
-    <div class="banner">
-      &#9203; This is the <strong>placeholder page</strong>. Live data will be injected
-      automatically by the hourly GitHub Actions workflow and this page will be
-      redeployed to GitHub Pages.
+  <section>
+    <h2>Current conditions</h2>
+    <div class="cards">
+      <div class="card"><div class="label">Temperature</div><div class="value">7.9 °C</div></div>
+      <div class="card"><div class="label">Humidity</div><div class="value">67 %</div></div>
+      <div class="card"><div class="label">Wind</div><div class="value">5.4 km/h</div></div>
+      <div class="card"><div class="label">Condition</div><div class="value">Overcast</div></div>
     </div>
+  </section>
 
-    <div class="card">
-      <h2>Current Conditions</h2>
-      <div class="stat-grid">
-        <div class="stat">
-          <div class="value">_8.3 °C_</div>
-          <div class="label">Temperature</div>
-        </div>
-        <div class="stat">
-          <div class="value">_66%_</div>
-          <div class="label">Humidity</div>
-        </div>
-        <div class="stat">
-          <div class="value">_5.4 km/h_</div>
-          <div class="label">Wind Speed</div>
-        </div>
-        <div class="stat">
-          <div class="value" style="font-size:1rem">_Overcast_</div>
-          <div class="label">Condition</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>7-Day Forecast</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Condition</th>
-            <th>High / Low</th>
-            <th>Precipitation</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>2026-03-08</td><td>Overcast</td><td>17.1&deg;C / 6.1&deg;C</td><td>0.0 mm</td></tr>
-          <tr><td>2026-03-09</td><td>Overcast</td><td>17.3&deg;C / 3.6&deg;C</td><td>0.0 mm</td></tr>
-          <tr><td>2026-03-10</td><td>Partly cloudy</td><td>17.4&deg;C / 3.1&deg;C</td><td>0.0 mm</td></tr>
-          <tr><td>2026-03-11</td><td>Fog</td><td>19.3&deg;C / 4.5&deg;C</td><td>0.0 mm</td></tr>
-          <tr><td>2026-03-12</td><td>Overcast</td><td>15.1&deg;C / 5.6&deg;C</td><td>0.0 mm</td></tr>
-          <tr><td>2026-03-13</td><td>Mainly clear</td><td>17.6&deg;C / 3.5&deg;C</td><td>0.0 mm</td></tr>
-          <tr><td>2026-03-14</td><td>Overcast</td><td>18.7&deg;C / 5.4&deg;C</td><td>0.0 mm</td></tr>
-          
-        </tbody>
-      </table>
-    </div>
-
-    <p class="footer">Last updated: _2026-03-07 23:23 UTC_</p>
-  </div>
+  <section>
+    <h2>7-day forecast</h2>
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Condition</th><th>High / Low</th><th>Precipitation</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2026-03-08</td><td>Overcast</td><td>17.1 / 6.1 °C</td><td>0.0 mm</td></tr><tr><td>2026-03-09</td><td>Overcast</td><td>17.3 / 3.6 °C</td><td>0.0 mm</td></tr><tr><td>2026-03-10</td><td>Partly cloudy</td><td>17.4 / 3.1 °C</td><td>0.0 mm</td></tr><tr><td>2026-03-11</td><td>Fog</td><td>19.3 / 4.5 °C</td><td>0.0 mm</td></tr><tr><td>2026-03-12</td><td>Overcast</td><td>15.1 / 5.6 °C</td><td>0.0 mm</td></tr><tr><td>2026-03-13</td><td>Mainly clear</td><td>17.6 / 3.5 °C</td><td>0.0 mm</td></tr><tr><td>2026-03-14</td><td>Overcast</td><td>18.7 / 5.4 °C</td><td>0.0 mm</td></tr>
+      </tbody>
+    </table>
+  </section>
 </body>
 </html>
