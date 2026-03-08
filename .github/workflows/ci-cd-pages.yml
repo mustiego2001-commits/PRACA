@@ -1,154 +1,160 @@
-name: Deploy static content to Pages
- 
+name: Hourly Data Refresh
+
 on:
-  # Runs every minute (minimum interval GitHub supports).
-  # Note: GitHub may delay scheduled runs by several minutes under high load.
   schedule:
-    - cron: "* * * * *"
- 
-  # Runs on every push to the default branch so you can verify the result immediately.
-  push:
-    branches:
-      - main   # change to master or your default branch name if different
- 
-  # Allows manual triggering from the Actions tab
+    - cron: "0 * * * *"
   workflow_dispatch:
- 
-# contents: write  — needed to commit updated HTML back to the repo
-# pages / id-token — needed to deploy to GitHub Pages
+
 permissions:
   contents: write
-  pages: write
-  id-token: write
- 
-# Allow only one concurrent deployment; never cancel in-progress runs
+
 concurrency:
-  group: "pages"
+  group: hourly-data-refresh
   cancel-in-progress: false
- 
+
 jobs:
-  fetch-update-deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  update-html:
     runs-on: ubuntu-latest
- 
+
     steps:
-      # ── 1. Checkout ──────────────────────────────────────────────────────
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
- 
-      # ── 2. Fetch live weather data ────────────────────────────────────────
-      # curl fetches JSON from Open-Meteo; jq extracts each field.
-      - name: Fetch data from Open-Meteo API
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch API data and regenerate index.html
         run: |
-          DATA=$(curl -fsSL "https://api.open-meteo.com/v1/forecast/?latitude=52.52&longitude=13.41&current=temperature_2m,wind_speed_10m,weather_code,relative_humidity_2m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code&timezone=auto&forecast_days=7")
- 
-          echo "$DATA" > /tmp/weather.json
-          echo "API fetch complete."
- 
-      # ── 3. Inject data into index.html using element IDs ─────────────────
-      # IDs are always present in the committed HTML, so this works every run.
-      - name: Update HTML with live data
+          python - <<'PY'
+          import datetime
+          import html
+          import json
+          import urllib.request
+
+          API_URL = (
+              "https://api.open-meteo.com/v1/forecast"
+              "?latitude=52.52&longitude=13.41"
+              "&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code"
+              "&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code"
+              "&timezone=UTC&forecast_days=7"
+          )
+
+          WEATHER_CODES = {
+              0: "Clear sky",
+              1: "Mainly clear",
+              2: "Partly cloudy",
+              3: "Overcast",
+              45: "Fog",
+              48: "Depositing rime fog",
+              51: "Light drizzle",
+              53: "Moderate drizzle",
+              55: "Dense drizzle",
+              61: "Slight rain",
+              63: "Moderate rain",
+              65: "Heavy rain",
+              71: "Slight snow",
+              73: "Moderate snow",
+              75: "Heavy snow",
+              80: "Rain showers",
+              81: "Rain showers",
+              82: "Violent showers",
+              95: "Thunderstorm",
+              99: "Thunderstorm with hail",
+          }
+
+          with urllib.request.urlopen(API_URL, timeout=20) as response:
+              payload = response.read().decode("utf-8")
+              data = json.loads(payload)
+
+          current = data["current"]
+          current_units = data["current_units"]
+          daily = data["daily"]
+
+          updated_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+          condition = WEATHER_CODES.get(current["weather_code"], f"Code {current['weather_code']}")
+
+          rows = []
+          for day, code, t_max, t_min, precip in zip(
+              daily["time"],
+              daily["weather_code"],
+              daily["temperature_2m_max"],
+              daily["temperature_2m_min"],
+              daily["precipitation_sum"],
+          ):
+              day_condition = WEATHER_CODES.get(code, f"Code {code}")
+              rows.append(
+                  "<tr>"
+                  f"<td>{html.escape(str(day))}</td>"
+                  f"<td>{html.escape(day_condition)}</td>"
+                  f"<td>{t_max} / {t_min} {html.escape(data['daily_units']['temperature_2m_max'])}</td>"
+                  f"<td>{precip} {html.escape(data['daily_units']['precipitation_sum'])}</td>"
+                  "</tr>"
+              )
+
+          page = f"""<!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Weather Dashboard</title>
+            <style>
+              body {{ font-family: Arial, sans-serif; margin: 2rem auto; max-width: 900px; line-height: 1.5; color: #1f2937; padding: 0 1rem; }}
+              h1, h2 {{ margin-bottom: .5rem; }}
+              .meta {{ color: #4b5563; margin-bottom: 1rem; }}
+              .cards {{ display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: 1.5rem; }}
+              .card {{ border: 1px solid #e5e7eb; border-radius: .5rem; padding: .75rem; background: #f9fafb; }}
+              .label {{ font-size: .8rem; color: #6b7280; }}
+              .value {{ font-size: 1.2rem; font-weight: 700; }}
+              table {{ width: 100%; border-collapse: collapse; }}
+              th, td {{ border: 1px solid #e5e7eb; padding: .5rem; text-align: left; }}
+              th {{ background: #f3f4f6; }}
+            </style>
+          </head>
+          <body>
+            <h1>Berlin Weather Dashboard</h1>
+            <p class="meta">Last update: {updated_at}</p>
+
+            <section>
+              <h2>Current conditions</h2>
+              <div class="cards">
+                <div class="card"><div class="label">Temperature</div><div class="value">{current['temperature_2m']} {current_units['temperature_2m']}</div></div>
+                <div class="card"><div class="label">Humidity</div><div class="value">{current['relative_humidity_2m']} {current_units['relative_humidity_2m']}</div></div>
+                <div class="card"><div class="label">Wind</div><div class="value">{current['wind_speed_10m']} {current_units['wind_speed_10m']}</div></div>
+                <div class="card"><div class="label">Condition</div><div class="value">{html.escape(condition)}</div></div>
+              </div>
+            </section>
+
+            <section>
+              <h2>7-day forecast</h2>
+              <table>
+                <thead>
+                  <tr><th>Date</th><th>Condition</th><th>High / Low</th><th>Precipitation</th></tr>
+                </thead>
+                <tbody>
+                  {"".join(rows)}
+                </tbody>
+              </table>
+            </section>
+          </body>
+          </html>
+          """
+
+          with open("index.html", "w", encoding="utf-8", newline="\n") as file:
+              file.write(page)
+          PY
+
+      - name: Commit and push if changed
         run: |
-          DATA=$(cat /tmp/weather.json)
- 
-          TEMP=$(echo "$DATA"      | jq -r '.current.temperature_2m')
-          TEMP_UNIT=$(echo "$DATA" | jq -r '.current_units.temperature_2m')
-          HUMIDITY=$(echo "$DATA"  | jq -r '.current.relative_humidity_2m')
-          HUM_UNIT=$(echo "$DATA"  | jq -r '.current_units.relative_humidity_2m')
-          WIND=$(echo "$DATA"      | jq -r '.current.wind_speed_10m')
-          WIND_UNIT=$(echo "$DATA" | jq -r '.current_units.wind_speed_10m')
-          WCODE=$(echo "$DATA"     | jq -r '.current.weather_code')
-          FETCHED_AT=$(date -u '+%Y-%m-%d %H:%M UTC')
- 
-          case "$WCODE" in
-            0)        COND="Clear sky" ;;
-            1)        COND="Mainly clear" ;;
-            2)        COND="Partly cloudy" ;;
-            3)        COND="Overcast" ;;
-            45|48)    COND="Fog" ;;
-            51|53|55) COND="Drizzle" ;;
-            61|63|65) COND="Rain" ;;
-            71|73|75) COND="Snow" ;;
-            80|81|82) COND="Showers" ;;
-            95)       COND="Thunderstorm" ;;
-            99)       COND="Thunderstorm + hail" ;;
-            *)        COND="Code $WCODE" ;;
-          esac
- 
-          # ── Replace single-line values via ID ─────────────────────────────
-          sed -i "s|id=\"temp-value\" class=\"value\">[^<]*|id=\"temp-value\" class=\"value\">${TEMP} ${TEMP_UNIT}|g" index.html
-          sed -i "s|id=\"humidity-value\" class=\"value\">[^<]*|id=\"humidity-value\" class=\"value\">${HUMIDITY}${HUM_UNIT}|g" index.html
-          sed -i "s|id=\"wind-value\" class=\"value\">[^<]*|id=\"wind-value\" class=\"value\">${WIND} ${WIND_UNIT}|g" index.html
-          sed -i "s|id=\"condition-value\"[^>]*>[^<]*|id=\"condition-value\" class=\"value\" style=\"font-size:1rem\">${COND}|g" index.html
-          sed -i "s|id=\"last-updated\"[^>]*>[^<]*|id=\"last-updated\" class=\"footer\">Last updated: ${FETCHED_AT}|g" index.html
- 
-          # ── Build 7-day forecast rows ─────────────────────────────────────
-          COUNT=$(echo "$DATA" | jq '.daily.time | length')
-          ROWS=""
-          for i in $(seq 0 $((COUNT - 1))); do
-            D=$(echo  "$DATA" | jq -r ".daily.time[$i]")
-            C=$(echo  "$DATA" | jq -r ".daily.weather_code[$i]")
-            HI=$(echo "$DATA" | jq -r ".daily.temperature_2m_max[$i]")
-            LO=$(echo "$DATA" | jq -r ".daily.temperature_2m_min[$i]")
-            PR=$(echo "$DATA" | jq -r ".daily.precipitation_sum[$i]")
-            case "$C" in
-              0)        DC="Clear sky" ;;
-              1)        DC="Mainly clear" ;;
-              2)        DC="Partly cloudy" ;;
-              3)        DC="Overcast" ;;
-              45|48)    DC="Fog" ;;
-              51|53|55) DC="Drizzle" ;;
-              61|63|65) DC="Rain" ;;
-              71|73|75) DC="Snow" ;;
-              80|81|82) DC="Showers" ;;
-              95)       DC="Thunderstorm" ;;
-              99)       DC="Thunderstorm + hail" ;;
-              *)        DC="Code $C" ;;
-            esac
-            ROWS="${ROWS}          <tr><td>${D}</td><td>${DC}</td><td>${HI}°C / ${LO}°C</td><td>${PR} mm</td></tr>\n"
-          done
- 
-          # ── Replace tbody contents, keyed off id="forecast-body" ──────────
-          OPEN_LINE=$(grep -n 'id="forecast-body"' index.html | cut -d: -f1)
-          CLOSE_LINE=$(awk 'NR>'"$OPEN_LINE"' && /<\/tbody>/{print NR; exit}' index.html)
-          {
-            head -n $OPEN_LINE index.html
-            printf "%b" "$ROWS"
-            tail -n +$CLOSE_LINE index.html
-          } > /tmp/updated.html
-          mv /tmp/updated.html index.html
- 
-          echo "index.html updated successfully."
- 
-      # ── 4. Commit & push the updated HTML back to the repo ───────────────
-      # [skip ci] prevents this push from re-triggering the workflow.
-      - name: Commit and push updated HTML
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name  "github-actions[bot]"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
           if git diff --staged --quiet; then
-            echo "No changes detected — nothing to commit."
+            echo "No changes to commit."
           else
-            git commit -m "chore(data): refresh weather dashboard $(date -u +'%Y-%m-%dT%H:%M:%SZ') [skip ci]"
-            git push
+            git commit -m "chore: refresh weather dashboard data"
+            git push origin HEAD:${GITHUB_REF_NAME}
           fi
- 
-      # ── 5. Configure GitHub Pages ────────────────────────────────────────
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
- 
-      # ── 6. Upload public/ as the Pages artifact ──────────────────────────
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: '.'
- 
-      # ── 7. Deploy to GitHub Pages ────────────────────────────────────────
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
