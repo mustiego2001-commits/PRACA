@@ -1,4 +1,4 @@
-# Junior DevOps Engineer - Technical Assessment (Demo)
+# DEVOPS THINGS (Demo)
 
 Ten projekt to gotowy szablon zadania rekrutacyjnego:
 - prosta aplikacja web,
