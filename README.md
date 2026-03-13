@@ -85,16 +85,4 @@ Mechanizmy odpornosci:
    - Przyczyna: cache.
    - Rozwiazanie: przycisk "Odswiez dane" wymusza pobranie z API.
 
-## 7. Jak obronic projekt na rozmowie
-
-Powiedz krotko:
-- "Mialem wymaganie na public API i automatyczny deployment."
-- "Dodalem CI, zeby nie wdrazac kodu z bledem."
-- "Dodalem timeout/retry/cache, bo siec i API nie sa niezawodne."
-- "Wybralem GitHub Pages, bo to minimalny koszt i szybkie dostarczenie."
-
-To pokazuje, ze rozumiesz:
-- CI/CD,
-- niezawodnosc integracji API,
-- swiadome decyzje architektoniczne,
-- praktyczne podejscie DevOps.
+]
